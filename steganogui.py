@@ -6,24 +6,52 @@ import ffmpeg
 from tkinter import *
 
 
+# def AES_encrypt(plaintext, key):
+#     cipher = AES.new(key, AES.MODE_ECB)
+#     return cipher.encrypt(plaintext)
 
-def AES_encrypt(plaintext, key):
-    cipher = AES.new(key, AES.MODE_ECB)
-    return cipher.encrypt(plaintext)
+
+# Fungsi untuk mengenkripsi data rahasia menggunakan algoritma AES
+def AES_encrypt(data_rahasia, kunci):
+    cipher = AES.new(kunci.encode(), AES.MODE_CBC)
+    iv = cipher.iv
+    data_rahasia = np.pad(data_rahasia.encode(), (0, AES.block_size - len(data_rahasia) % AES.block_size))
+    encrypted = cipher.encrypt(data_rahasia)
+    return iv + encrypted
+    # data_rahasia = np.pad(data_rahasia.encode(), AES.block_size)
+    # encrypted = cipher.encrypt(data_rahasia)
+    # return iv + encrypted
+
+
+# Fungsi untuk mendekripsi data rahasia menggunakan algoritma AES
+# def AES_decrypt(encrypted, kunci):
+#     iv = encrypted[: AES.block_size]
+#     cipher = AES.new(kunci.decode(), AES.MODE_CBC, iv)
+#     decrypted = cipher.decrypt(encrypted[AES.block_size :])
+#     return np.unpad(decrypted, AES.block_size).decode()
+def AES_decrypt(encrypted, kunci):
+    iv = encrypted[: AES.block_size]
+    cipher = AES.new(kunci, AES.MODE_CBC, iv)
+    decrypted = cipher.decrypt(encrypted[AES.block_size :])
+    return np.trim_zeros(decrypted, 'b').decode()
+
 
 def F5(audio_file_path, pesan, ukuran_blok):
     audio = ffmpeg.input(audio_file_path)
-    audio = ffmpeg.output(audio, 'pipe:', format='wav')
+    audio = ffmpeg.output(audio, "pipe:", format="wav")
     audio = audio.run(capture_stdout=True, capture_stderr=True)
 
     audio_data = np.frombuffer(audio[0], np.int16)
     panjang_pesan = len(pesan)
 
     for i in range(panjang_pesan):
-        blok_audio = audio_data[i * ukuran_blok: (i + 1) * ukuran_blok]
-        audio_data[i * ukuran_blok: (i + 1) * ukuran_blok] = blok_audio & 0xFFFE | int(pesan[i])
+        blok_audio = audio_data[i * ukuran_blok : (i + 1) * ukuran_blok]
+        audio_data[i * ukuran_blok : (i + 1) * ukuran_blok] = blok_audio & 0xFFFE | int(
+            pesan[i]
+        )
 
     return audio_data.tobytes()
+
 
 def hide_text_in_audio():
     # Buka file audio
@@ -37,36 +65,38 @@ def hide_text_in_audio():
         return
 
     # Baca teks dari file
-    with open(text_file_path, 'r') as f:
+    with open(text_file_path, "r") as f:
         plaintext = f.read()
 
     # Enkripsi teks dengan AES
-    kunci = b'super_secret_key'
+    kunci = b"super_secret_key"
     encrypted = AES_encrypt(plaintext, kunci)
-
 
     # Sisipkan panjang teks terenkripsi ke dalam audio cover
     audio_stego = F5(audio_file_path, str(len(encrypted)), ukuran_blok=512)
 
     # Sisipkan teks terenkripsi ke dalam audio cover
-    audio_stego = F5(audio_stego, encrypted, ukuran_blok=512)
+    # audio_stego = F5(audio_stego, encrypted, ukuran_blok=512)
 
     # Simpan audio stego
-    audio_stego_file_path = filedialog.asksaveasfilename(filetypes=[("WAV files", "*.wav")])
+    audio_stego_file_path = filedialog.asksaveasfilename(
+        filetypes=[("WAV files", "*.wav")]
+    )
     if audio_stego_file_path:
-        with open(audio_stego_file_path, 'wb') as f:
+        with open(audio_stego_file_path, "wb") as f:
             f.write(audio_stego)
         messagebox.showinfo("Success", "Teks berhasil disisipkan dalam audio!")
 
 
 def show_gui(filename, input_key):
     root = tk.Tk()
-    root.title('Audio Steganography')
+    root.title("Audio Steganography")
     root.geometry("300x300")
-
-
-    label_title = Label(root, text="Audio Steganography", font=("Comic Sans MS", 18, "bold"))
+    label_title = Label(
+        root, text="Audio Steganography", font=("Comic Sans MS", 18, "bold")
+    )
     label_title.pack(pady=16)
+
     def button_hide():
         hide_text_in_audio()
 
@@ -75,14 +105,12 @@ def show_gui(filename, input_key):
         audio_file_path = filedialog.askopenfilename(filetypes=[("WAV files", "*.wav")])
         if not audio_file_path:
             return
-
         # Baca audio cover
         audio_data = np.fromfile(audio_file_path, np.int16)
-
         # Ekstrak panjang teks terenkripsi
         panjang_teks = ""
         for i in range(32):
-            blok_audio = audio_data[i * 512: (i + 1) * 512]
+            blok_audio = audio_data[i * 512 : (i + 1) * 512]
             bit_terakhir = str(blok_audio[-1] & 1)
             panjang_teks += bit_terakhir
 
@@ -91,26 +119,32 @@ def show_gui(filename, input_key):
         # Ekstrak teks terenkripsi
         teks_terenkripsi = ""
         for i in range(32, 32 + panjang_teks * 8):
-            blok_audio = audio_data[i * 512: (i + 1) * 512]
+            blok_audio = audio_data[i * 512 : (i + 1) * 512]
             bit_terakhir = str(blok_audio[-1] & 1)
             teks_terenkripsi += bit_terakhir
 
         # Dekripsi teks terenkripsi
         kunci = input_key.get().encode()
         cipher = AES.new(kunci, AES.MODE_ECB)
-        decrypted = cipher.decrypt(bytes(int(teks_terenkripsi[i:i + 8], 2) for i in range(0, len(teks_terenkripsi), 8)))
+        decrypted = cipher.decrypt(
+            bytes(
+                int(teks_terenkripsi[i : i + 8], 2)
+                for i in range(0, len(teks_terenkripsi), 8)
+            )
+        )
 
         # Tampilkan teks terdekripsi
         messagebox.showinfo("Teks Terdekripsi", decrypted.decode())
 
     hide_button = tk.Button(root, text="Sisipkan Teks", command=button_hide)
-    hide_button.pack(padx=10,pady=10,fill="x")
+    hide_button.pack(padx=10, pady=10, fill="x")
 
     show_button = tk.Button(root, text="Ekstrak Teks", command=button_show)
-    show_button.pack(padx=10,pady=10, fill="x")
+    show_button.pack(padx=10, pady=10, fill="x")
 
     root.mainloop()
 
+
 # Run the GUI
-input_key = tk.StringVar 
-show_gui('filename', 'input_key')
+input_key = tk.StringVar
+show_gui("filename", "input_key")
