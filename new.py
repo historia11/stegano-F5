@@ -1,6 +1,5 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox
-from cryptography.fernet import Fernet
 from Crypto.Cipher import AES
 import numpy as np
 import ffmpeg
@@ -50,7 +49,8 @@ def f5_encode(audio_file_path: str, message: str, block_size: int) -> bytes:
         block_audio = np.bitwise_or(block_audio, int(message_char))
 
         # Memperbarui data audio dengan blok data audio yang telah dimodifikasi
-        audio_data[start:end] = block_audio
+        audio_data_new = audio_data.copy()
+        audio_data_new [start:end] = block_audio
 
     # Mengonversi data audio yang telah dimodifikasi kembali ke byte dan mengembalikannya
     return audio_data.tobytes()
@@ -70,9 +70,10 @@ def read_plaintext_from_file(file_path):
 
 
 def encrypt_plaintext(plaintext: str, key: bytes) -> bytes:
-    cipher_suite = Fernet(key)
-    encrypted_text = cipher_suite.encrypt(plaintext.encode())
-    return encrypted_text
+    cipher = AES.new(key, AES.MODE_ECB)
+    plaintext_terpadding = pad(plaintext.encode(), AES.block_size)
+    teks_terenkripsi = cipher.encrypt(plaintext_terpadding)
+    return teks_terenkripsi
 
 def hide_text_in_audio(
     audio_file: bytes, text_to_hide: str, block_size: int = 512) -> bytes:
@@ -107,7 +108,7 @@ def hide_text_in_audio():
     encrypted_text = encrypt_plaintext(plaintext, key)
 
     # Sisipkan teks terenkripsi ke dalam audio
-    steganographed_audio_data = hide_text_in_audio(audio_file, encrypted_text)
+    steganographed_audio_data = f5_encode(audio_file, encrypted_text, block_size=512)
 
     # Simpan audio hasil penyisipan
     save_audio_stego(steganographed_audio_data)
@@ -136,7 +137,7 @@ def show_gui(filename, input_key):
         panjang_teks = ""
         for i in range(32):
             blok_audio = audio_data[i * 512 : (i + 1) * 512]
-            bit_terakhir = str(blok_audio[-1] & 1)
+            bit_terakhir =  str (blok_audio[-1] & 1)
             panjang_teks += bit_terakhir
 
         panjang_teks = int(panjang_teks, 2)
@@ -145,7 +146,7 @@ def show_gui(filename, input_key):
         teks_terenkripsi = ""
         for i in range(32, 32 + panjang_teks * 8):
             blok_audio = audio_data[i * 512 : (i + 1) * 512]
-            bit_terakhir = str(blok_audio[-1] & 1)
+            bit_terakhir =  blok_audio[-1] & 1
             teks_terenkripsi += bit_terakhir
 
         # Dekripsi teks terenkripsi
